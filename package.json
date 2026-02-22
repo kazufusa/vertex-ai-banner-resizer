@@ -1,0 +1,24 @@
+{
+  "name": "vertex-ai-banner-resizer",
+  "version": "1.0.0",
+  "description": "MCP server for resizing ad banners using Vertex AI Imagen 3 outpainting",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@google-cloud/aiplatform": "^3.34.0",
+    "@google/genai": "^1.42.0",
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "sharp": "^0.33.5",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.8.0"
+  },
+  "license": "MIT"
+}
