@@ -102,18 +102,20 @@ export async function recomposeWithGemini(
     request.targetHeight,
   );
 
-  const prompt =
-    request.prompt ??
+  const basePrompt =
     `Rearrange the layout of this advertisement banner for a ${request.targetWidth}x${request.targetHeight} (${aspectRatio}) format. ` +
-      "This is a LAYOUT REARRANGEMENT task — reposition and redistribute elements to best fit the new aspect ratio. " +
-      "Keep ALL original visual elements: cards, text, logos, icons, decorative elements, and background. " +
-      "CRITICAL: Each individual element (cards, icons, text blocks, logos) must preserve its original aspect ratio and proportions. " +
-      "Do NOT stretch, squash, or distort any element. " +
-      "Extend or fill the background naturally to cover the new canvas area. " +
-      "Maintain the exact same visual style, color palette, typography, and brand identity. " +
-      "Reproduce all Japanese text exactly as shown in the original, character by character. " +
-      "Do NOT remove any existing elements. Do NOT add new text or logos that were not in the original. " +
-      "The result should look like a professional banner intentionally designed for this aspect ratio.";
+    "This is a LAYOUT REARRANGEMENT task — reposition and redistribute elements to best fit the new aspect ratio. " +
+    "Keep ALL original visual elements: cards, text, logos, icons, decorative elements, and background. " +
+    "CRITICAL: Each individual element (cards, icons, text blocks, logos) must preserve its original aspect ratio and proportions. " +
+    "Do NOT stretch, squash, or distort any element. " +
+    "Extend or fill the background naturally to cover the new canvas area. " +
+    "Maintain the exact same visual style, color palette, typography, and brand identity. " +
+    "Reproduce all Japanese text exactly as shown in the original, character by character. " +
+    "Do NOT remove any existing elements. Do NOT add new text or logos that were not in the original. " +
+    "The result should look like a professional banner intentionally designed for this aspect ratio.";
+  const prompt = request.prompt
+    ? `${basePrompt}\n\nAdditional instructions: ${request.prompt}`
+    : basePrompt;
 
   let lastError: Error | null = null;
 

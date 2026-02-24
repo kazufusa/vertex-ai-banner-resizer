@@ -20,7 +20,7 @@ export interface ImageMetadata {
   channels: number;
 }
 
-export type ResizeStrategy = "resize" | "smart_crop" | "outpaint";
+export type ResizeStrategy = "copy" | "resize" | "smart_crop" | "outpaint";
 
 export interface ResizeResult {
   outputPath: string;

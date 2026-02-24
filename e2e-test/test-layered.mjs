@@ -113,7 +113,7 @@ const {
   cropLayers,
   computeLayerPlacements,
   getImageMetadata,
-} = await import("./dist/services/image-processor.js");
+} = await import("../dist/services/image-processor.js");
 
 // ─── [1] cropLayers テスト ───
 

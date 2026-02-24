@@ -3,6 +3,8 @@
  *
  * meta/landscape (1200x628) と meta/stories_reels (1080x1920) を生成し
  * tmp/output/ に出力する
+ *
+ * MCP サーバーを1プロセスだけ起動し、全テストケースで使い回すことで高速化。
  */
 import { spawn } from "node:child_process";
 import { resolve, join } from "node:path";
@@ -18,58 +20,96 @@ const GCP_PROJECT = process.env.GOOGLE_CLOUD_PROJECT;
 let passed = 0;
 let failed = 0;
 
-// ─── Helpers ───
+// ─── Shared MCP Server ───
+
+const proc = spawn(SERVER_CMD, SERVER_ARGS, {
+  stdio: ["pipe", "pipe", "pipe"],
+  env: { ...process.env, GOOGLE_CLOUD_PROJECT: GCP_PROJECT },
+});
+
+proc.stderr.on("data", (d) => {
+  process.stderr.write(d);
+});
+
+// 応答バッファ: id → { resolve, reject }
+const pending = new Map();
+let buffer = "";
+
+proc.stdout.on("data", (chunk) => {
+  buffer += chunk.toString();
+  const lines = buffer.split("\n");
+  buffer = lines.pop(); // 未完了行を保持
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    try {
+      const msg = JSON.parse(line);
+      if (msg.id != null && pending.has(msg.id)) {
+        const { resolve } = pending.get(msg.id);
+        pending.delete(msg.id);
+        resolve(msg.result);
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }
+});
+
+proc.on("close", () => {
+  for (const { reject } of pending.values()) {
+    reject(new Error("Server closed unexpectedly"));
+  }
+  pending.clear();
+});
+
+let nextId = 10;
+
+function sendMessage(msg) {
+  proc.stdin.write(JSON.stringify(msg) + "\n");
+}
 
 function callTool(name, args) {
   return new Promise((resolvePromise, reject) => {
-    const proc = spawn(SERVER_CMD, SERVER_ARGS, {
-      stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env, GOOGLE_CLOUD_PROJECT: GCP_PROJECT },
-    });
-
-    let stdout = "";
-    let stderr = "";
-    proc.stdout.on("data", (d) => (stdout += d.toString()));
-    proc.stderr.on("data", (d) => {
-      stderr += d.toString();
-      process.stderr.write(d);
-    });
-
-    const messages = [
-      {
-        jsonrpc: "2.0",
-        id: 0,
-        method: "initialize",
-        params: {
-          protocolVersion: "2024-11-05",
-          capabilities: {},
-          clientInfo: { name: "e2e-test", version: "1.0.0" },
-        },
-      },
-      { jsonrpc: "2.0", method: "notifications/initialized" },
-      { jsonrpc: "2.0", id: 10, method: "tools/call", params: { name, arguments: args } },
-    ];
-
-    for (const msg of messages) {
-      proc.stdin.write(JSON.stringify(msg) + "\n");
-    }
-    proc.stdin.end();
-
+    const id = nextId++;
     const timeout = setTimeout(() => {
-      proc.kill();
+      pending.delete(id);
       reject(new Error("Timeout (180s)"));
     }, 180000);
 
-    proc.on("close", () => {
-      clearTimeout(timeout);
-      const lines = stdout.trim().split("\n").filter(Boolean);
-      const responses = lines.map((l) => JSON.parse(l));
-      const resp = responses.find((r) => r.id === 10);
-      if (!resp) return reject(new Error("No response"));
-      resolvePromise(resp.result);
+    pending.set(id, {
+      resolve: (result) => {
+        clearTimeout(timeout);
+        resolvePromise(result);
+      },
+      reject: (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      },
     });
+
+    sendMessage({ jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } });
   });
 }
+
+// Initialize server
+sendMessage({
+  jsonrpc: "2.0",
+  id: 0,
+  method: "initialize",
+  params: {
+    protocolVersion: "2024-11-05",
+    capabilities: {},
+    clientInfo: { name: "e2e-test", version: "1.0.0" },
+  },
+});
+
+// Wait for initialize response
+await new Promise((resolve) => {
+  pending.set(0, { resolve, reject: (e) => { throw e; } });
+});
+
+sendMessage({ jsonrpc: "2.0", method: "notifications/initialized" });
+
+// ─── Helpers ───
 
 async function test(name, fn) {
   try {
@@ -131,7 +171,9 @@ for (const { platform, size, w, h } of TARGETS) {
   });
 }
 
-// ─── Summary ───
+// ─── Cleanup & Summary ───
+
+proc.stdin.end();
 
 console.log("\n" + "=".repeat(50));
 console.log(`Results: ${passed} passed, ${failed} failed`);

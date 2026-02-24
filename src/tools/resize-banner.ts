@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import sharp from "sharp";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { getBannerSize } from "../config/banner-sizes.js";
@@ -131,6 +132,11 @@ export async function resizeBanner(
   );
 
   switch (strategy) {
+    case "copy":
+      // サイズ変更なし → PNG変換のみ（リサンプリングなし）
+      await sharp(imagePath).png().toFile(outputPath);
+      break;
+
     case "resize":
       // アスペクト比が同じ → 単純リサイズ
       await resizeToExact(imagePath, targetSize.width, targetSize.height, outputPath);

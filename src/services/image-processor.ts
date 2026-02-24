@@ -35,6 +35,11 @@ export function determineStrategy(
   targetWidth: number,
   targetHeight: number,
 ): ResizeStrategy {
+  // 完全一致 → コピーのみ
+  if (srcWidth === targetWidth && srcHeight === targetHeight) {
+    return "copy";
+  }
+
   const srcRatio = srcWidth / srcHeight;
   const targetRatio = targetWidth / targetHeight;
   const ratioDiff = Math.abs(srcRatio - targetRatio) / targetRatio;
